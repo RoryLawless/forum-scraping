@@ -1,7 +1,6 @@
 # Script to extract text of forum posts from a website --------------------
 # Allows the user to specify the specific thread with the variable thread_number
-# Text can be found in div classes with ids beginning with "post_text_"
-# followed by numbers
+# Code verfied to work on 2025-03-30
 
 # Setup -------------------------------------------------------------------
 
@@ -18,13 +17,13 @@ thread_number <- "1215552"
 # 15 for each page
 # This number appears in the URL after list/ and before e.g. /1215552.page
 # Use glue from {glue} to create a vector of URLs corresponding to each page
-# NOTE: It seems 0 is a valid value which corresponds to the first page
+# NOTE: 0 is a valid value which corresponds to the first post
 page_numbers <- seq.int(0, 150, by = 15)
 
 urls <- glue(
-  "https://www.dcurbanmom.com/jforum/posts/list/",
-  "{page_numbers}/",
-  "{thread_number}.page"
+	"https://www.dcurbanmom.com/jforum/posts/list/",
+	"{page_numbers}/",
+	"{thread_number}.page"
 )
 
 # Extract text of forum posts ---------------------------------------------
@@ -32,8 +31,12 @@ urls <- glue(
 # Read the HTML content of the page
 
 page <- map(
-  urls,
-  read_html
+	urls,
+	\(x) {
+		# Add a delay to avoid overloading the server
+		Sys.sleep(5)
+		read_html(x)
+	}
 )
 
 # Extract the text of the forum posts
@@ -43,20 +46,24 @@ page <- map(
 # html_text2 from {rvest}
 
 posts <- map(
-  page,
-  \(x) {
-    x |>
-      html_element(xpath = '//*[starts-with(@id, "post_text_")]') |>
-      html_text2()
-  }
+	page,
+	\(x) {
+		x |>
+			html_elements(
+				css = ".postbody"
+			) |>
+			html_table() |>
+			list_rbind() |>
+			rename(posts = X1)
+	}
 )
 
 # Convert to dataframe and add row id
 
-posts_df <- tibble(posts = unlist(posts))
+posts_df <- list_rbind(posts)
 
 posts_df <- posts_df |>
-  mutate(row_id = row_number())
+	mutate(row_id = row_number())
 
 # Write to CSV ------------------------------------------------------------
 
